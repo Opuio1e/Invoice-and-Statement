@@ -17,6 +17,7 @@
         <a href="#invoice-ui">Invoice UI</a>
         <a href="#cash-flow">Cash Flow UI</a>
         <a href="#client-ledger">Client Ledger</a>
+        <a href="#partywise-statement">Partywise Statement</a>
         <a href="#invoice-report">Invoice Report</a>
       </nav>
     </header>
@@ -391,6 +392,39 @@
               <span>Amount</span>
               <span>Balance</span>
               <span>Remarks</span>
+            </div>
+            <div class="table-body">0 row(s)</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="partywise-statement" class="page-section">
+        <h2>Partywise Statement</h2>
+        <div class="card statement-card">
+          <div class="form-grid compact statement-filters">
+            <div class="field">
+              <label>Party</label>
+              <select>
+                <option>Select Party</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>From Date</label>
+              <input type="text" placeholder="mm/dd/yyyy" />
+            </div>
+            <div class="field">
+              <label>To Date</label>
+              <input type="text" placeholder="mm/dd/yyyy" />
+            </div>
+          </div>
+          <div class="table-shell">
+            <div class="table-head statement-table-head">
+              <span>Date</span>
+              <span>Ref No.</span>
+              <span>Description</span>
+              <span>Debit</span>
+              <span>Credit</span>
+              <span>Balance</span>
             </div>
             <div class="table-body">0 row(s)</div>
           </div>
