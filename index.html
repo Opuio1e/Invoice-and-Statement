@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Invoice and Statement</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+    />
+  </head>
+  <body>
+    <header class="site-header">
+      <h1>Invoice and Statement</h1>
+      <nav class="site-nav">
+        <a href="#invoice-ui">Invoice UI</a>
+        <a href="#cash-flow">Cash Flow UI</a>
+        <a href="#client-ledger">Client Ledger</a>
+        <a href="#invoice-report">Invoice Report</a>
+      </nav>
+    </header>
+
+    <main>
+      <section id="invoice-ui" class="page-section">
+        <h2>Invoice UI</h2>
+        <div class="card invoice-card">
+          <div class="form-grid">
+            <div class="field">
+              <label>Stone</label>
+              <input type="text" placeholder="Calibrate" />
+            </div>
+            <div class="field">
+              <label>Date</label>
+              <input type="text" placeholder="mm/dd/yyyy" />
+            </div>
+            <div class="field">
+              <label>Party</label>
+              <input type="text" placeholder="Supplier / Customer" />
+            </div>
+            <div class="field">
+              <label>Deet</label>
+              <input type="text" placeholder="Reference / Details" />
+            </div>
+            <div class="field">
+              <label>Lot Name</label>
+              <select>
+                <option>-- Select --</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Base Grade</label>
+              <input type="text" value="#1" />
+            </div>
+            <div class="field">
+              <label>How Many Rows</label>
+              <input type="text" value="1" />
+            </div>
+            <div class="field">
+              <label>Description</label>
+              <input type="text" placeholder="" />
+            </div>
+            <div class="field">
+              <label>Shape (initial)</label>
+              <select>
+                <option>-- Select --</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Size (initial)</label>
+              <select>
+                <option>-- Select --</option>
+              </select>
+            </div>
+          </div>
+          <button class="primary-button">Generate Rows</button>
+
+          <div class="table-shell">
+            <div class="table-head">
+              <span>Tx ID</span>
+              <span>Stone</span>
+              <span>Date</span>
+              <span>Party</span>
+              <span>Deet</span>
+              <span>Lot Name</span>
+              <span>Grade</span>
+              <span>Description</span>
+              <span>Shape</span>
+              <span>Size</span>
+              <span>CTS</span>
+              <span>Price</span>
+              <span>Amount</span>
+              <span>Remarks</span>
+              <span>Actions</span>
+            </div>
+            <div class="table-body">0 row(s)</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-section">
+        <h3 class="modal-title">Saved Lists</h3>
+        <div class="modal-shell">
+          <div class="modal-header">
+            <div class="title-with-icon">
+              <span class="icon-square"></span>
+              <h4>Saved Lists</h4>
+            </div>
+            <button class="ghost-button">✕ Close</button>
+          </div>
+          <div class="modal-body">
+            <div class="list-panel">
+              <h4>Lot Names</h4>
+              <div class="input-row">
+                <input type="text" placeholder="Add new lot name" />
+                <button class="small-button">Add</button>
+              </div>
+              <div class="chip-row">
+                <span class="chip">LOT 65 <button>×</button></span>
+                <span class="chip">AJMZ 2 <button>×</button></span>
+                <span class="chip">AJMZ 3 <button>×</button></span>
+                <span class="chip">AJMZ 4 <button>×</button></span>
+                <span class="chip">MEH 1 <button>×</button></span>
+              </div>
+            </div>
+            <div class="list-panel">
+              <h4>Shapes</h4>
+              <div class="input-row">
+                <input type="text" placeholder="Add new shape" />
+                <button class="small-button">Add</button>
+              </div>
+              <div class="chip-row">
+                <span class="chip">OV/PS <button>×</button></span>
+                <span class="chip">OVAL <button>×</button></span>
+                <span class="chip">PEARS <button>×</button></span>
+                <span class="chip">E/C <button>×</button></span>
+                <span class="chip">ROUND <button>×</button></span>
+                <span class="chip">HXA <button>×</button></span>
+                <span class="chip">MIX <button>×</button></span>
+                <span class="chip">OCT <button>×</button></span>
+                <span class="chip">MQ <button>×</button></span>
+              </div>
+            </div>
+            <div class="list-panel">
+              <h4>Sizes</h4>
+              <div class="input-row">
+                <input type="text" placeholder="Add new size" />
+                <button class="small-button">Add</button>
+              </div>
+              <div class="chip-row">
+                <span class="chip">4X3 <button>×</button></span>
+                <span class="chip">5X3 <button>×</button></span>
+                <span class="chip">4.5X3.5 <button>×</button></span>
+                <span class="chip">5X4 <button>×</button></span>
+                <span class="chip">6X4 <button>×</button></span>
+                <span class="chip">7X5 <button>×</button></span>
+                <span class="chip">8X6 <button>×</button></span>
+                <span class="chip">9X7 <button>×</button></span>
+                <span class="chip">MIX <button>×</button></span>
+                <span class="chip">3MM <button>×</button></span>
+                <span class="chip">4MM <button>×</button></span>
+                <span class="chip">5MM <button>×</button></span>
+                <span class="chip">6MM <button>×</button></span>
+                <span class="chip">7MM <button>×</button></span>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="primary-button">Save</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="invoice-report" class="page-section">
+        <h2>Invoice Report</h2>
+        <div class="invoice-report">
+          <div class="report-header">
+            <h3>INVOICE</h3>
+            <div class="rule"></div>
+            <div class="meta-grid">
+              <div class="meta-item">
+                <span>Date:</span>
+                <span class="meta-value">01/06/2026</span>
+              </div>
+              <div class="meta-item">
+                <span>Invoice No.:</span>
+                <span class="meta-value">INV-202601-0001</span>
+              </div>
+              <div class="meta-item">
+                <span>Transaction Type:</span>
+                <span class="meta-value">All Types</span>
+              </div>
+              <div class="meta-item">
+                <span>Party:</span>
+                <span class="meta-value">Select Party</span>
+              </div>
+              <div class="meta-item">
+                <span>Sell ID:</span>
+                <span class="meta-value">Select Sell ID</span>
+              </div>
+              <div class="meta-item">
+                <span>Total CTS:</span>
+                <span class="meta-value">0.00</span>
+              </div>
+              <div class="meta-item">
+                <span>Total Amount:</span>
+                <span class="meta-value">0.00</span>
+              </div>
+              <div class="meta-item">
+                <span>Average Price:</span>
+                <span class="meta-value">0.00</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="filter-bar">
+            <div class="filter-item">
+              <label>Date From:</label>
+              <input type="text" placeholder="mm/dd/yyyy" />
+            </div>
+            <div class="filter-item">
+              <label>Date To:</label>
+              <input type="text" placeholder="mm/dd/yyyy" />
+            </div>
+            <div class="filter-item">
+              <label>Source:</label>
+              <select>
+                <option>All Sources</option>
+              </select>
+            </div>
+            <div class="filter-actions">
+              <button class="outline-button">🧹 Clear</button>
+              <button class="primary-button">🖨 Print</button>
+            </div>
+          </div>
+
+          <table class="invoice-table">
+            <thead>
+              <tr>
+                <th>SR NO.</th>
+                <th>LOT NO.</th>
+                <th>DESCRIPTION</th>
+                <th>SHAPE</th>
+                <th>SIZE</th>
+                <th>GRADE</th>
+                <th>PCS</th>
+                <th>CTS</th>
+                <th>PRICE</th>
+                <th>AMOUNT</th>
+                <th>REMARKS</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+              </tr>
+              <tr>
+                <td>3</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="invoice-print">
+          <div class="print-meta">
+            <span>1/6/26, 8:44 PM</span>
+            <span>INVOICE — Inventory System</span>
+          </div>
+          <h3>INVOICE</h3>
+          <div class="print-rule"></div>
+          <div class="print-summary">
+            <div class="summary-column">
+              <p><strong>Date:</strong> 2026-01-06</p>
+              <p><strong>Transaction Type:</strong> Sales / Approval</p>
+              <p><strong>Sell ID:</strong></p>
+              <p><strong>Total Amount:</strong> 0.00</p>
+            </div>
+            <div class="summary-column">
+              <p><strong>Invoice No.:</strong> INV-202601-0001</p>
+              <p><strong>Party:</strong></p>
+              <p><strong>Total CTS:</strong> 0.00</p>
+              <p><strong>Average Price:</strong> 0.00</p>
+            </div>
+          </div>
+          <div class="print-rule"></div>
+          <table class="print-table">
+            <thead>
+              <tr>
+                <th>SR NO.</th>
+                <th>LOT NO.</th>
+                <th>DESCRIPTION</th>
+                <th>SHAPE</th>
+                <th>SIZE</th>
+                <th>GRADE</th>
+                <th>PCS</th>
+                <th>CTS</th>
+                <th>PRICE</th>
+                <th>AMOUNT</th>
+                <th>REMARKS</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+              </tr>
+              <tr>
+                <td colspan="6" class="totals-label">Totals:</td>
+                <td>-</td>
+                <td>0.00</td>
+                <td>-</td>
+                <td>0.00</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="cash-flow" class="page-section">
+        <h2>Cash Flow UI</h2>
+        <div class="card">
+          <div class="form-grid compact">
+            <div class="field">
+              <label>From Date</label>
+              <input type="text" placeholder="mm/dd/yyyy" />
+            </div>
+            <div class="field">
+              <label>To Date</label>
+              <input type="text" placeholder="mm/dd/yyyy" />
+            </div>
+            <div class="field">
+              <label>Transaction Type</label>
+              <select>
+                <option>Sales</option>
+                <option>Approval</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Party</label>
+              <input type="text" placeholder="Supplier / Customer" />
+            </div>
+          </div>
+          <div class="table-shell">
+            <div class="table-head">
+              <span>Date</span>
+              <span>Party</span>
+              <span>Type</span>
+              <span>Amount</span>
+              <span>Balance</span>
+              <span>Remarks</span>
+            </div>
+            <div class="table-body">0 row(s)</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="client-ledger" class="page-section">
+        <h2>Client Ledger</h2>
+        <div class="card">
+          <div class="form-grid compact">
+            <div class="field">
+              <label>Client</label>
+              <input type="text" placeholder="Select Client" />
+            </div>
+            <div class="field">
+              <label>From Date</label>
+              <input type="text" placeholder="mm/dd/yyyy" />
+            </div>
+            <div class="field">
+              <label>To Date</label>
+              <input type="text" placeholder="mm/dd/yyyy" />
+            </div>
+          </div>
+          <div class="table-shell">
+            <div class="table-head">
+              <span>Invoice No.</span>
+              <span>Date</span>
+              <span>Description</span>
+              <span>Debit</span>
+              <span>Credit</span>
+              <span>Balance</span>
+            </div>
+            <div class="table-body">0 row(s)</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
