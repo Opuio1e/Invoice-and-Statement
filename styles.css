@@ -372,6 +372,49 @@ select {
   font-weight: 600;
 }
 
+.table-row {
+  display: grid;
+  grid-template-columns: repeat(15, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e2d3bf;
+  align-items: center;
+  font-size: 13px;
+}
+
+.table-row:last-of-type {
+  border-bottom: none;
+}
+
+.cell {
+  padding: 6px 4px;
+  min-height: 24px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell.editable {
+  background: #fbf8f2;
+  border: 1px solid #e0d0ba;
+  border-radius: 6px;
+  padding: 6px 8px;
+  outline: none;
+}
+
+.cell.editable:focus {
+  background: #fff;
+  border-color: #d6c2a7;
+}
+
+.row-count {
+  padding: 8px 14px;
+  background: #f9f3e9;
+  text-align: center;
+  font-size: 13px;
+  color: #5a5148;
+  font-weight: 500;
+}
+
 @media (max-width: 1024px) {
   .form-grid,
   .form-grid.compact,

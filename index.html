@@ -11,6 +11,11 @@
     />
   </head>
   <body>
+    <script>
+      window.SUPABASE_URL = 'https://qqnevtwucknbaquorgau.supabase.co';
+      window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxbmV2dHd1Y2tuYmFxdW9yZ2F1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyMjgzMjIsImV4cCI6MjA4NTgwNDMyMn0.b5ko3EmXev-YpVWuHHj5-1usUx38o81kt5TZ2dQocoQ';
+    </script>
+    <script type="module" src="./client.js"></script>
     <header class="site-header">
       <h1>Invoice and Statement</h1>
       <nav class="site-nav">
@@ -52,7 +57,7 @@
             </div>
             <div class="field">
               <label>Lot Name</label>
-              <select>
+              <select data-saved-list="lot_names">
                 <option>-- Select --</option>
               </select>
             </div>
@@ -74,13 +79,13 @@
             </div>
             <div class="field">
               <label>Shape (initial)</label>
-              <select>
+              <select data-saved-list="shapes">
                 <option>-- Select --</option>
               </select>
             </div>
             <div class="field">
               <label>Size (initial)</label>
-              <select>
+              <select data-saved-list="sizes">
                 <option>-- Select --</option>
               </select>
             </div>
