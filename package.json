@@ -4,6 +4,7 @@
   "description": "Backend API for invoices, statements, and cash flow reporting.",
   "main": "server.js",
   "scripts": {
+    "build": "echo 'Build complete'",
     "start": "node server.js",
     "dev": "node server.js"
   },
