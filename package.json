@@ -4,7 +4,7 @@
   "description": "Backend API for invoices, statements, and cash flow reporting.",
   "main": "server.js",
   "scripts": {
-    "build": "echo 'Build complete'",
+    "build": "rm -rf dist && mkdir dist && cp index.html styles.css dist/",
     "start": "node server.js",
     "dev": "node server.js"
   },

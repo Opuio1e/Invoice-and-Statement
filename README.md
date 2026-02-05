@@ -50,3 +50,15 @@ Example (Render/Heroku-style):
 ```bash
 PORT=8080 npm start
 ```
+
+### Bolt publish (static UI only)
+
+Bolt expects a build step to generate static assets to publish. This repo now creates a `dist/`
+folder that contains the UI:
+
+```bash
+npm run build
+```
+
+Then publish the `dist/` folder as the output. Note that this publishes only the static UI;
+the API in `server.js` still requires a Node-hosted environment.
