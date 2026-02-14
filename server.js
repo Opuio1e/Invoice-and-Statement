@@ -117,15 +117,18 @@ app.get("/api/partywise-statement", (req, res) => {
 });
 
 app.get("/api/cash-flow", (req, res) => {
-  const { from, to } = req.query;
+  const { from, to, transactionType, party } = req.query;
   const fromDate = from ? new Date(from) : null;
   const toDate = to ? new Date(to) : null;
+  const normalizedParty = String(party || "").trim().toLowerCase();
 
   const entries = dataStore.invoices
     .filter((invoice) => {
       const invoiceDate = new Date(invoice.date);
       if (fromDate && invoiceDate < fromDate) return false;
       if (toDate && invoiceDate > toDate) return false;
+      if (transactionType && invoice.transactionType !== transactionType) return false;
+      if (normalizedParty && !String(invoice.party || "").toLowerCase().includes(normalizedParty)) return false;
       return true;
     })
     .map((invoice) => ({
@@ -133,6 +136,7 @@ app.get("/api/cash-flow", (req, res) => {
       party: invoice.party,
       type: invoice.transactionType,
       amount: invoice.totals.totalAmount,
+      remarks: invoice.remarks || "",
     }));
 
   let balance = 0;
