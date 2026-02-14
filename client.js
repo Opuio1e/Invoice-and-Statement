@@ -8,6 +8,24 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const LISTS = ['lot_names', 'shapes', 'sizes', 'descriptions', 'grades'];
 const cache = {};
 const generatedInvoices = [];
+const reportState = {
+  persistedInvoices: [],
+};
+
+const reportSelectors = {
+  root: '#invoice-report',
+  filterDateFrom: '#invoice-report .filter-item:nth-child(1) input',
+  filterDateTo: '#invoice-report .filter-item:nth-child(2) input',
+  filterSource: '#invoice-report .filter-item:nth-child(3) select',
+  clearButton: '#invoice-report .filter-actions .outline-button',
+  printButton: '#invoice-report .filter-actions .primary-button',
+  reportTableBody: '#invoice-report .invoice-table tbody',
+  printTableBody: '#invoice-report .print-table tbody',
+  reportMetaValues: '#invoice-report .report-header .meta-value',
+  printSummaryRows: '#invoice-report .print-summary p',
+};
+
+let reportDom = null;
 
 async function loadLists() {
   for (const listName of LISTS) {
@@ -91,6 +109,202 @@ function toNumber(value) {
   return Number.isFinite(num) ? num : 0;
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function toComparableDate(value) {
+  if (!value) return null;
+  const iso = toIsoDate(value);
+  return new Date(`${iso}T00:00:00`);
+}
+
+function normalizeInvoice(invoice) {
+  const rowSource = invoice.rows || invoice.items || [];
+  const transactionType = invoice.transactionType || invoice.type || 'Sales';
+  return {
+    id: invoice.id || invoice.invoiceNumber || Date.now(),
+    invoiceNumber: invoice.invoiceNumber || invoice.invoice_no || '',
+    date: toIsoDate(invoice.date),
+    party: invoice.party || '',
+    transactionType,
+    source: invoice.source || transactionType,
+    sellId: invoice.sellId || invoice.sell_id || invoice.sourceId || '',
+    rows: rowSource.map((row, index) => ({
+      id: row.id || `${invoice.id || 'invoice'}-${index}`,
+      lotName: row.lotName || row.lotNo || '',
+      description: row.description || '',
+      shape: row.shape || '',
+      size: row.size || '',
+      grade: row.grade || '',
+      pcs: toNumber(row.pcs),
+      cts: toNumber(row.cts),
+      price: toNumber(row.price),
+      remarks: row.remarks || '',
+    })),
+  };
+}
+
+function getReportFilters() {
+  const selectedSource = reportDom?.filterSource?.value || '';
+  return {
+    dateFrom: reportDom?.filterDateFrom?.value || '',
+    dateTo: reportDom?.filterDateTo?.value || '',
+    source: selectedSource === 'All Sources' ? '' : selectedSource,
+    party: reportDom?.partyFilter?.value || '',
+    transactionType: reportDom?.transactionTypeFilter?.value || '',
+    sellId: reportDom?.sellIdFilter?.value || '',
+  };
+}
+
+async function loadPersistedInvoices() {
+  try {
+    const response = await fetch('/api/invoices');
+    if (response.ok) {
+      const payload = await response.json();
+      reportState.persistedInvoices = (payload.invoices || []).map(normalizeInvoice);
+      refreshReportFilterOptions();
+      return;
+    }
+  } catch (error) {
+    console.warn('API invoices unavailable, trying Supabase fallback.', error);
+  }
+
+  try {
+    const { data, error } = await supabase.from('invoices').select('*').order('date', { ascending: false });
+    if (error) throw error;
+    reportState.persistedInvoices = (data || []).map(normalizeInvoice);
+    refreshReportFilterOptions();
+  } catch (error) {
+    console.warn('Supabase invoices unavailable, using local invoice rows only.', error);
+    reportState.persistedInvoices = generatedInvoices.map(normalizeInvoice);
+    refreshReportFilterOptions();
+  }
+}
+
+
+function refreshReportFilterOptions() {
+  if (!reportDom?.filterSource) return;
+  const existing = reportDom.filterSource.value;
+  const sources = [...new Set(reportState.persistedInvoices.map((invoice) => invoice.source).filter(Boolean))];
+  reportDom.filterSource.innerHTML = ['<option>All Sources</option>', ...sources.map((source) => `<option>${escapeHtml(source)}</option>`)].join('');
+  if (sources.includes(existing)) reportDom.filterSource.value = existing;
+}
+
+async function persistInvoice(invoice) {
+  const payload = {
+    party: invoice.party,
+    transactionType: invoice.transactionType,
+    date: invoice.date,
+    items: invoice.rows.map((row) => ({
+      lotNo: row.lotName,
+      description: row.description,
+      shape: row.shape,
+      size: row.size,
+      grade: row.grade,
+      pcs: toNumber(row.pcs),
+      cts: toNumber(row.cts),
+      price: toNumber(row.price),
+      remarks: row.remarks,
+    })),
+  };
+
+  try {
+    await fetch('/api/invoices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    console.warn('Could not persist invoice via API.', error);
+  }
+}
+
+function renderInvoiceReport(invoices, filters = {}) {
+  if (!reportDom?.reportTableBody || !reportDom?.printTableBody) return;
+
+  const fromDate = toComparableDate(filters.dateFrom);
+  const toDate = toComparableDate(filters.dateTo);
+  const normParty = (filters.party || '').trim().toLowerCase();
+  const normType = (filters.transactionType || '').trim().toLowerCase();
+  const normSource = (filters.source || '').trim().toLowerCase();
+  const normSellId = (filters.sellId || '').trim().toLowerCase();
+
+  const filteredInvoices = invoices.filter((invoice) => {
+    const invoiceDate = toComparableDate(invoice.date);
+    const invoiceParty = String(invoice.party || '').toLowerCase();
+    const invoiceType = String(invoice.transactionType || '').toLowerCase();
+    const invoiceSource = String(invoice.source || '').toLowerCase();
+    const invoiceSellId = String(invoice.sellId || '').toLowerCase();
+
+    if (fromDate && invoiceDate && invoiceDate < fromDate) return false;
+    if (toDate && invoiceDate && invoiceDate > toDate) return false;
+    if (normParty && !invoiceParty.includes(normParty)) return false;
+    if (normType && invoiceType !== normType) return false;
+    if (normSource && invoiceSource !== normSource) return false;
+    if (normSellId && invoiceSellId !== normSellId) return false;
+    return true;
+  });
+
+  const flattenedRows = filteredInvoices.flatMap((invoice) =>
+    invoice.rows.map((row) => ({ ...row, invoice }))
+  );
+
+  if (!flattenedRows.length) {
+    reportDom.reportTableBody.innerHTML = '<tr><td colspan="11">No invoice records found.</td></tr>';
+    reportDom.printTableBody.innerHTML = '<tr><td colspan="11">No invoice records found.</td></tr>';
+  } else {
+    const rowsHtml = flattenedRows.map((entry, index) => {
+      const amount = toNumber(entry.cts) * toNumber(entry.price);
+      return `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(entry.lotName)}</td>
+        <td>${escapeHtml(entry.description)}</td>
+        <td>${escapeHtml(entry.shape)}</td>
+        <td>${escapeHtml(entry.size)}</td>
+        <td>${escapeHtml(entry.grade)}</td>
+        <td>${toNumber(entry.pcs)}</td>
+        <td>${toNumber(entry.cts).toFixed(2)}</td>
+        <td>${toNumber(entry.price).toFixed(2)}</td>
+        <td>${amount.toFixed(2)}</td>
+        <td>${escapeHtml(entry.remarks)}</td>
+      </tr>`;
+    }).join('');
+    reportDom.reportTableBody.innerHTML = rowsHtml;
+    reportDom.printTableBody.innerHTML = rowsHtml;
+  }
+
+  const totalPcs = flattenedRows.reduce((sum, row) => sum + toNumber(row.pcs), 0);
+  const totalCts = flattenedRows.reduce((sum, row) => sum + toNumber(row.cts), 0);
+  const totalAmount = flattenedRows.reduce((sum, row) => sum + (toNumber(row.cts) * toNumber(row.price)), 0);
+  const averagePrice = totalCts ? totalAmount / totalCts : 0;
+  const firstInvoice = filteredInvoices[0];
+
+  reportDom.metaValues.date.textContent = firstInvoice ? formatDate(firstInvoice.date) : '-';
+  reportDom.metaValues.invoiceNo.textContent = firstInvoice?.invoiceNumber || '-';
+  reportDom.metaValues.transactionType.textContent = filters.transactionType || firstInvoice?.transactionType || 'All Types';
+  reportDom.metaValues.party.textContent = filters.party || firstInvoice?.party || 'All Parties';
+  reportDom.metaValues.sellId.textContent = filters.sellId || firstInvoice?.sellId || '-';
+  reportDom.metaValues.totalCts.textContent = `${totalCts.toFixed(2)} (${totalPcs.toFixed(0)} pcs)`;
+  reportDom.metaValues.totalAmount.textContent = totalAmount.toFixed(2);
+  reportDom.metaValues.averagePrice.textContent = averagePrice.toFixed(2);
+
+  writeSummaryValue(reportDom.printSummary.date, firstInvoice ? firstInvoice.date : '-');
+  writeSummaryValue(reportDom.printSummary.transactionType, filters.transactionType || firstInvoice?.transactionType || 'All Types');
+  writeSummaryValue(reportDom.printSummary.sellId, filters.sellId || firstInvoice?.sellId || '-');
+  writeSummaryValue(reportDom.printSummary.totalAmount, totalAmount.toFixed(2));
+  writeSummaryValue(reportDom.printSummary.invoiceNo, firstInvoice?.invoiceNumber || '-');
+  writeSummaryValue(reportDom.printSummary.party, filters.party || firstInvoice?.party || 'All Parties');
+  writeSummaryValue(reportDom.printSummary.totalCts, `${totalCts.toFixed(2)} (${totalPcs.toFixed(0)} pcs)`);
+  writeSummaryValue(reportDom.printSummary.averagePrice, averagePrice.toFixed(2));
+}
+
 function renderInvoiceRows(invoice) {
   const tableBody = document.querySelector('#invoice-ui .table-body');
   tableBody.innerHTML = invoice.rows.map((row) => `
@@ -115,45 +329,7 @@ function renderInvoiceRows(invoice) {
 }
 
 function renderReportTable() {
-  const reportBody = document.querySelector('.invoice-table tbody');
-  const printBody = document.querySelector('.print-table tbody');
-  const latestInvoice = generatedInvoices[generatedInvoices.length - 1];
-
-  if (!latestInvoice) {
-    reportBody.innerHTML = '<tr><td colspan="11">No rows generated yet.</td></tr>';
-    printBody.innerHTML = '<tr><td colspan="11">No rows generated yet.</td></tr>';
-    return;
-  }
-
-  const reportRows = latestInvoice.rows.map((row, index) => `
-    <tr>
-      <td>${index + 1}</td>
-      <td>${row.lotName}</td>
-      <td>${row.description}</td>
-      <td>${row.shape}</td>
-      <td>${row.size}</td>
-      <td>${row.grade}</td>
-      <td>${row.pcs}</td>
-      <td>${row.cts}</td>
-      <td>${row.price}</td>
-      <td>${(toNumber(row.cts) * toNumber(row.price)).toFixed(2)}</td>
-      <td>${row.remarks}</td>
-    </tr>
-  `).join('');
-
-  const totalCts = latestInvoice.rows.reduce((sum, row) => sum + toNumber(row.cts), 0);
-  const totalAmount = latestInvoice.rows.reduce((sum, row) => sum + (toNumber(row.cts) * toNumber(row.price)), 0);
-
-  reportBody.innerHTML = reportRows;
-  printBody.innerHTML = `${reportRows}
-    <tr>
-      <td colspan="6" class="totals-label">Totals:</td>
-      <td>${latestInvoice.rows.reduce((sum, row) => sum + toNumber(row.pcs), 0)}</td>
-      <td>${totalCts.toFixed(2)}</td>
-      <td>-</td>
-      <td>${totalAmount.toFixed(2)}</td>
-      <td></td>
-    </tr>`;
+  renderInvoiceReport(reportState.persistedInvoices, getReportFilters());
 }
 
 function renderSummaryTables() {
@@ -179,7 +355,7 @@ function renderSummaryTables() {
   }).join('') + `<div class="row-count">${generatedInvoices.length} row(s)</div>`;
 }
 
-function generateRows() {
+async function generateRows() {
   const rowCount = Math.max(1, parseInt(document.getElementById('invoice-row-count')?.value, 10) || 1);
   const date = toIsoDate(document.getElementById('invoice-date')?.value);
   const party = document.getElementById('invoice-party')?.value.trim() || 'Walk-in Party';
@@ -214,6 +390,8 @@ function generateRows() {
   };
 
   generatedInvoices.push(invoice);
+  await persistInvoice(invoice);
+  await loadPersistedInvoices();
   renderInvoiceRows(invoice);
   renderReportTable();
   renderSummaryTables();
@@ -298,6 +476,67 @@ function initEventListeners() {
       });
     }
   }
+
+  if (reportDom) {
+    [reportDom.filterDateFrom, reportDom.filterDateTo, reportDom.filterSource].forEach((control) => {
+      control?.addEventListener('change', () => renderInvoiceReport(reportState.persistedInvoices, getReportFilters()));
+      control?.addEventListener('input', () => renderInvoiceReport(reportState.persistedInvoices, getReportFilters()));
+    });
+
+    reportDom.clearButton?.addEventListener('click', () => {
+      if (reportDom.filterDateFrom) reportDom.filterDateFrom.value = '';
+      if (reportDom.filterDateTo) reportDom.filterDateTo.value = '';
+      if (reportDom.filterSource) reportDom.filterSource.selectedIndex = 0;
+      renderInvoiceReport(reportState.persistedInvoices, {});
+    });
+
+    reportDom.printButton?.addEventListener('click', () => {
+      document.body.classList.add('print-report-view');
+      window.print();
+      setTimeout(() => document.body.classList.remove('print-report-view'), 0);
+    });
+  }
+}
+
+function initInvoiceReportDom() {
+  const reportMetaValues = Array.from(document.querySelectorAll(reportSelectors.reportMetaValues));
+  const printSummaryRows = Array.from(document.querySelectorAll(reportSelectors.printSummaryRows));
+
+  reportDom = {
+    root: document.querySelector(reportSelectors.root),
+    filterDateFrom: document.querySelector(reportSelectors.filterDateFrom),
+    filterDateTo: document.querySelector(reportSelectors.filterDateTo),
+    filterSource: document.querySelector(reportSelectors.filterSource),
+    clearButton: document.querySelector(reportSelectors.clearButton),
+    printButton: document.querySelector(reportSelectors.printButton),
+    reportTableBody: document.querySelector(reportSelectors.reportTableBody),
+    printTableBody: document.querySelector(reportSelectors.printTableBody),
+    metaValues: {
+      date: reportMetaValues[0],
+      invoiceNo: reportMetaValues[1],
+      transactionType: reportMetaValues[2],
+      party: reportMetaValues[3],
+      sellId: reportMetaValues[4],
+      totalCts: reportMetaValues[5],
+      totalAmount: reportMetaValues[6],
+      averagePrice: reportMetaValues[7],
+    },
+    printSummary: {
+      date: printSummaryRows[0]?.querySelector('strong')?.nextSibling,
+      transactionType: printSummaryRows[1]?.querySelector('strong')?.nextSibling,
+      sellId: printSummaryRows[2]?.querySelector('strong')?.nextSibling,
+      totalAmount: printSummaryRows[3]?.querySelector('strong')?.nextSibling,
+      invoiceNo: printSummaryRows[4]?.querySelector('strong')?.nextSibling,
+      party: printSummaryRows[5]?.querySelector('strong')?.nextSibling,
+      totalCts: printSummaryRows[6]?.querySelector('strong')?.nextSibling,
+      averagePrice: printSummaryRows[7]?.querySelector('strong')?.nextSibling,
+    },
+  };
+}
+
+function writeSummaryValue(textNode, value) {
+  if (!textNode) return;
+  textNode.textContent = ` ${value}`;
 }
 
 function fixListPanelMarkup() {
@@ -308,9 +547,12 @@ function fixListPanelMarkup() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   fixListPanelMarkup();
-  loadLists();
+  initInvoiceReportDom();
+  await loadLists();
+  await loadPersistedInvoices();
+  renderReportTable();
   initPageNavigation();
   initEventListeners();
 });
