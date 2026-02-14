@@ -32,6 +32,17 @@ const calculateInvoiceTotals = (items) => {
   return totals;
 };
 
+
+const getStatementTransactionColumns = (transactionType, amount) => {
+  const normalizedType = String(transactionType || "").trim().toLowerCase();
+  const creditTypes = ["purchase", "payment", "receipt", "credit", "return"];
+  const isCredit = creditTypes.some((type) => normalizedType.includes(type));
+  return {
+    debit: isCredit ? 0 : amount,
+    credit: isCredit ? amount : 0,
+  };
+};
+
 const calculatePartyBalances = (invoices) => {
   const balances = new Map();
   invoices.forEach((invoice) => {
@@ -94,21 +105,35 @@ app.post("/api/invoices", (req, res) => {
 });
 
 app.get("/api/partywise-statement", (req, res) => {
-  const { party } = req.query;
+  const { party, from, to } = req.query;
   if (!party) {
     return res.status(400).json({ error: "party query param is required." });
   }
 
-  const invoices = dataStore.invoices.filter((invoice) => invoice.party === party);
+  const fromDate = from ? new Date(from) : null;
+  const toDate = to ? new Date(to) : null;
+
+  const invoices = dataStore.invoices
+    .filter((invoice) => {
+      if (invoice.party !== party) return false;
+      const invoiceDate = new Date(invoice.date);
+      if (fromDate && invoiceDate < fromDate) return false;
+      if (toDate && invoiceDate > toDate) return false;
+      return true;
+    })
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
   let runningBalance = 0;
   const statement = invoices.map((invoice) => {
-    runningBalance += invoice.totals.totalAmount;
+    const amount = invoice.totals.totalAmount;
+    const { debit, credit } = getStatementTransactionColumns(invoice.transactionType, amount);
+    runningBalance += debit - credit;
     return {
       date: invoice.date,
       refNo: invoice.invoiceNumber,
       description: invoice.transactionType,
-      debit: invoice.totals.totalAmount,
-      credit: 0,
+      debit,
+      credit,
       balance: runningBalance,
     };
   });
