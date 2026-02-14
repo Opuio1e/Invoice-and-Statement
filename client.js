@@ -8,6 +8,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const LISTS = ['lot_names', 'shapes', 'sizes', 'descriptions', 'grades'];
 const cache = {};
 const generatedInvoices = [];
+const authState = {
+  session: null,
+};
 const reportState = {
   persistedInvoices: [],
 };
@@ -26,6 +29,70 @@ const reportSelectors = {
 };
 
 let reportDom = null;
+
+function isAuthenticated() {
+  return Boolean(authState.session?.user);
+}
+
+function requireAuthentication(actionLabel = 'perform this action') {
+  if (isAuthenticated()) return true;
+  alert(`Please sign in to ${actionLabel}.`);
+  return false;
+}
+
+function updateWriteAccessUi() {
+  const canWrite = isAuthenticated();
+  const generateRowsBtn = document.getElementById('generate-rows-button');
+  if (generateRowsBtn) {
+    generateRowsBtn.disabled = !canWrite;
+    generateRowsBtn.title = canWrite ? '' : 'Sign in to create invoice rows';
+  }
+
+  document.querySelectorAll('#saved-lists .input-row input, #saved-lists .input-row button, #saved-lists .chip-row button').forEach((el) => {
+    el.disabled = !canWrite;
+    el.title = canWrite ? '' : 'Sign in to edit saved lists';
+  });
+}
+
+function renderAuthUi() {
+  const emailInput = document.getElementById('auth-email');
+  const passwordInput = document.getElementById('auth-password');
+  const loginButton = document.getElementById('auth-login');
+  const logoutButton = document.getElementById('auth-logout');
+  const status = document.getElementById('auth-status');
+
+  if (!emailInput || !passwordInput || !loginButton || !logoutButton || !status) return;
+
+  if (isAuthenticated()) {
+    status.textContent = `Signed in as ${authState.session.user.email || 'authenticated user'}. Write actions are enabled.`;
+    emailInput.hidden = true;
+    passwordInput.hidden = true;
+    loginButton.hidden = true;
+    logoutButton.hidden = false;
+  } else {
+    status.textContent = 'Not signed in. Sign in to create invoices and edit saved lists.';
+    emailInput.hidden = false;
+    passwordInput.hidden = false;
+    loginButton.hidden = false;
+    logoutButton.hidden = true;
+  }
+
+  updateWriteAccessUi();
+}
+
+async function initializeAuth() {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) {
+    console.warn('Unable to load auth session.', error);
+  }
+  authState.session = data?.session || null;
+  renderAuthUi();
+
+  supabase.auth.onAuthStateChange((_event, session) => {
+    authState.session = session;
+    renderAuthUi();
+  });
+}
 
 async function loadLists() {
   for (const listName of LISTS) {
@@ -59,24 +126,29 @@ function renderLists() {
       select.innerHTML = '<option>-- Select --</option>' + options;
     }
   }
+
+  updateWriteAccessUi();
 }
 
 async function addToList(listName, value) {
-  if (!value || cache[listName].includes(value)) return;
+  if (!requireAuthentication('edit saved lists')) return;
+  const normalized = String(value || '').trim();
+  if (!normalized || cache[listName].includes(normalized)) return;
 
   const { error } = await supabase
     .from(listName)
-    .insert([{ name: value }]);
+    .insert([{ name: normalized }]);
 
   if (error) {
     alert(`Error: ${error.message}`);
   } else {
-    cache[listName].push(value);
+    cache[listName].push(normalized);
     renderLists();
   }
 }
 
 async function removeFromList(listName, value) {
+  if (!requireAuthentication('edit saved lists')) return;
   const { error } = await supabase
     .from(listName)
     .delete()
@@ -197,6 +269,8 @@ function refreshReportFilterOptions() {
 }
 
 async function persistInvoice(invoice) {
+  if (!requireAuthentication('save an invoice')) return;
+
   const payload = {
     party: invoice.party,
     transactionType: invoice.transactionType,
@@ -215,13 +289,30 @@ async function persistInvoice(invoice) {
   };
 
   try {
-    await fetch('/api/invoices', {
+    const response = await fetch('/api/invoices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
+    if (response.ok) return;
+    console.warn(`API invoice insert failed with status ${response.status}. Trying Supabase fallback.`);
   } catch (error) {
-    console.warn('Could not persist invoice via API.', error);
+    console.warn('Could not persist invoice via API, trying Supabase fallback.', error);
+  }
+
+  try {
+    const { error } = await supabase.from('invoices').insert([{
+      invoiceNumber: invoice.invoiceNumber,
+      party: invoice.party,
+      transactionType: invoice.transactionType,
+      date: invoice.date,
+      items: payload.items,
+      source: invoice.transactionType,
+    }]);
+
+    if (error) throw error;
+  } catch (error) {
+    console.warn('Could not persist invoice via Supabase fallback.', error);
   }
 }
 
@@ -609,6 +700,8 @@ function renderSummaryTables() {
 }
 
 async function generateRows() {
+  if (!requireAuthentication('generate and save invoices')) return;
+
   const rowCount = Math.max(1, parseInt(document.getElementById('invoice-row-count')?.value, 10) || 1);
   const date = toIsoDate(document.getElementById('invoice-date')?.value);
   const party = document.getElementById('invoice-party')?.value.trim() || 'Walk-in Party';
@@ -712,6 +805,35 @@ function debounce(fn, delay = 250) {
 }
 
 function initEventListeners() {
+  const loginButton = document.getElementById('auth-login');
+  const logoutButton = document.getElementById('auth-logout');
+  const emailInput = document.getElementById('auth-email');
+  const passwordInput = document.getElementById('auth-password');
+
+  loginButton?.addEventListener('click', async () => {
+    const email = emailInput?.value?.trim() || '';
+    const password = passwordInput?.value || '';
+    if (!email || !password) {
+      alert('Enter email and password to sign in.');
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      alert(`Sign-in failed: ${error.message}`);
+      return;
+    }
+
+    passwordInput.value = '';
+  });
+
+  logoutButton?.addEventListener('click', async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      alert(`Sign-out failed: ${error.message}`);
+    }
+  });
+
   const generateRowsBtn = document.getElementById('generate-rows-button');
   if (generateRowsBtn) {
     generateRowsBtn.addEventListener('click', generateRows);
@@ -850,6 +972,7 @@ function fixListPanelMarkup() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  await initializeAuth();
   fixListPanelMarkup();
   initInvoiceReportDom();
   await loadLists();
