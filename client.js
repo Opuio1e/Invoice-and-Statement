@@ -367,6 +367,137 @@ function renderCashFlowTable(rows = []) {
   `).join('') + `<div class="row-count">${rows.length} row(s)</div>`;
 }
 
+function getStatementTransactionColumns(transactionType, amount) {
+  const normalizedType = String(transactionType || '').trim().toLowerCase();
+  const creditTypes = ['purchase', 'payment', 'receipt', 'credit', 'return'];
+  const isCredit = creditTypes.some((type) => normalizedType.includes(type));
+  return {
+    debit: isCredit ? 0 : amount,
+    credit: isCredit ? amount : 0,
+  };
+}
+
+function getPartywiseStatementFilters() {
+  const partywiseRoot = document.querySelector('#partywise-statement');
+  if (!partywiseRoot) {
+    return { party: '', from: '', to: '' };
+  }
+
+  return {
+    party: partywiseRoot.querySelector('#partywise-party')?.value || '',
+    from: partywiseRoot.querySelector('#partywise-from')?.value || '',
+    to: partywiseRoot.querySelector('#partywise-to')?.value || '',
+  };
+}
+
+function renderPartywiseStatement(rows = []) {
+  const statementBody = document.querySelector('#partywise-statement .table-body');
+  if (!statementBody) return;
+
+  if (!rows.length) {
+    statementBody.innerHTML = '<div class="row-count">0 row(s)</div>';
+    return;
+  }
+
+  statementBody.innerHTML = `${rows.map((row) => `
+    <div class="table-row">
+      <span class="cell">${formatDate(row.date)}</span>
+      <span class="cell">${escapeHtml(row.refNo || '')}</span>
+      <span class="cell">${escapeHtml(row.description || '')}</span>
+      <span class="cell">${toNumber(row.debit).toFixed(2)}</span>
+      <span class="cell">${toNumber(row.credit).toFixed(2)}</span>
+      <span class="cell">${toNumber(row.balance).toFixed(2)}</span>
+    </div>
+  `).join('')}<div class="row-count">${rows.length} row(s)</div>`;
+}
+
+async function loadParties() {
+  const partySelect = document.querySelector('#partywise-party');
+  if (!partySelect) return;
+
+  let parties = [];
+
+  try {
+    const response = await fetch('/api/parties');
+    if (!response.ok) throw new Error(`Parties API failed: ${response.status}`);
+    const payload = await response.json();
+    parties = payload.parties || [];
+  } catch (error) {
+    console.warn('Parties API unavailable, trying Supabase fallback.', error);
+  }
+
+  if (!parties.length) {
+    try {
+      const { data, error } = await supabase.from('parties').select('name').order('name');
+      if (error) throw error;
+      parties = (data || []).map((row) => row.name);
+    } catch (error) {
+      console.warn('Supabase parties unavailable, using invoices fallback.', error);
+      parties = reportState.persistedInvoices.map((invoice) => invoice.party).filter(Boolean);
+    }
+  }
+
+  const current = partySelect.value;
+  const uniqueParties = [...new Set(parties)].sort((a, b) => a.localeCompare(b));
+  partySelect.innerHTML = ['<option value="">Select Party</option>', ...uniqueParties.map((party) => `<option>${escapeHtml(party)}</option>`)].join('');
+
+  if (current && uniqueParties.includes(current)) {
+    partySelect.value = current;
+  }
+}
+
+async function loadPartywiseStatement() {
+  const filters = getPartywiseStatementFilters();
+  if (!filters.party) {
+    renderPartywiseStatement([]);
+    return;
+  }
+
+  const params = new URLSearchParams({ party: filters.party });
+  if (filters.from) params.set('from', toIsoDate(filters.from));
+  if (filters.to) params.set('to', toIsoDate(filters.to));
+
+  try {
+    const response = await fetch(`/api/partywise-statement?${params.toString()}`);
+    if (!response.ok) throw new Error(`Partywise statement API failed: ${response.status}`);
+    const payload = await response.json();
+    renderPartywiseStatement(payload.statement || []);
+    return;
+  } catch (error) {
+    console.warn('Partywise statement API unavailable, trying Supabase fallback.', error);
+  }
+
+  try {
+    let query = supabase.from('invoices').select('*').eq('party', filters.party).order('date', { ascending: true });
+    if (filters.from) query = query.gte('date', toIsoDate(filters.from));
+    if (filters.to) query = query.lte('date', toIsoDate(filters.to));
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    let runningBalance = 0;
+    const statement = (data || []).map((invoice) => {
+      const normalized = normalizeInvoice(invoice);
+      const amount = normalized.rows.reduce((sum, row) => sum + (toNumber(row.cts) * toNumber(row.price)), 0);
+      const { debit, credit } = getStatementTransactionColumns(normalized.transactionType, amount);
+      runningBalance += debit - credit;
+      return {
+        date: normalized.date,
+        refNo: normalized.invoiceNumber,
+        description: normalized.transactionType,
+        debit,
+        credit,
+        balance: runningBalance,
+      };
+    });
+
+    renderPartywiseStatement(statement);
+  } catch (error) {
+    console.warn('Unable to load partywise statement from Supabase fallback.', error);
+    renderPartywiseStatement([]);
+  }
+}
+
 async function loadCashFlow() {
   const filters = getCashFlowFilters();
   const params = new URLSearchParams();
@@ -418,13 +549,7 @@ async function loadCashFlow() {
 }
 
 function renderSummaryTables() {
-  const statementBody = document.querySelector('#partywise-statement .table-body');
   const ledgerBody = document.querySelector('#client-ledger .table-body');
-
-  statementBody.innerHTML = generatedInvoices.map((invoice) => {
-    const amount = invoice.rows.reduce((sum, row) => sum + (toNumber(row.cts) * toNumber(row.price)), 0);
-    return `<div class="table-row"><span class="cell">${formatDate(invoice.date)}</span><span class="cell">${invoice.invoiceNumber}</span><span class="cell">${invoice.transactionType}</span><span class="cell">${amount.toFixed(2)}</span><span class="cell">0.00</span><span class="cell">${amount.toFixed(2)}</span></div>`;
-  }).join('') + `<div class="row-count">${generatedInvoices.length} row(s)</div>`;
 
   ledgerBody.innerHTML = generatedInvoices.map((invoice) => {
     const amount = invoice.rows.reduce((sum, row) => sum + (toNumber(row.cts) * toNumber(row.price)), 0);
@@ -469,10 +594,12 @@ async function generateRows() {
   generatedInvoices.push(invoice);
   await persistInvoice(invoice);
   await loadPersistedInvoices();
+  await loadParties();
   renderInvoiceRows(invoice);
   renderReportTable();
   renderSummaryTables();
   await loadCashFlow();
+  await loadPartywiseStatement();
 
   document.querySelectorAll('#invoice-ui [data-action="delete"]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
@@ -483,6 +610,7 @@ async function generateRows() {
       renderReportTable();
       renderSummaryTables();
       loadCashFlow();
+      loadPartywiseStatement();
     });
   });
 }
@@ -596,6 +724,17 @@ function initEventListeners() {
     typeSelect?.addEventListener('change', loadCashFlow);
     partyInput?.addEventListener('input', debounce(loadCashFlow, 300));
   }
+
+  const partywiseRoot = document.querySelector('#partywise-statement');
+  if (partywiseRoot) {
+    const partySelect = partywiseRoot.querySelector('#partywise-party');
+    const fromInput = partywiseRoot.querySelector('#partywise-from');
+    const toInput = partywiseRoot.querySelector('#partywise-to');
+
+    partySelect?.addEventListener('change', loadPartywiseStatement);
+    fromInput?.addEventListener('change', loadPartywiseStatement);
+    toInput?.addEventListener('change', loadPartywiseStatement);
+  }
 }
 
 function initInvoiceReportDom() {
@@ -652,8 +791,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   initInvoiceReportDom();
   await loadLists();
   await loadPersistedInvoices();
+  await loadParties();
   renderReportTable();
   await loadCashFlow();
+  await loadPartywiseStatement();
   initPageNavigation();
   initEventListeners();
 });
