@@ -7,6 +7,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const LISTS = ['lot_names', 'shapes', 'sizes', 'descriptions', 'grades'];
 const cache = {};
+const generatedInvoices = [];
 
 async function loadLists() {
   for (const listName of LISTS) {
@@ -71,56 +72,160 @@ async function removeFromList(listName, value) {
   }
 }
 
+function toIsoDate(value) {
+  if (!value) return new Date().toISOString().slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const [month, day, year] = value.split('/');
+  if (!month || !day || !year) return new Date().toISOString().slice(0, 10);
+  return `${year.padStart(4, '20')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+}
+
+function formatDate(isoDate) {
+  if (!isoDate) return '';
+  const [year, month, day] = isoDate.split('-');
+  return `${month}/${day}/${year}`;
+}
+
+function toNumber(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function renderInvoiceRows(invoice) {
+  const tableBody = document.querySelector('#invoice-ui .table-body');
+  tableBody.innerHTML = invoice.rows.map((row) => `
+    <div class="table-row" data-row-id="${row.id}">
+      <span class="cell">${row.txId}</span>
+      <span class="cell">${row.stone}</span>
+      <span class="cell">${formatDate(invoice.date)}</span>
+      <span class="cell">${invoice.party}</span>
+      <span class="cell">${row.deet}</span>
+      <span class="cell">${row.lotName}</span>
+      <span class="cell editable" contenteditable="true">${row.grade}</span>
+      <span class="cell editable" contenteditable="true">${row.description}</span>
+      <span class="cell editable" contenteditable="true">${row.shape}</span>
+      <span class="cell editable" contenteditable="true">${row.size}</span>
+      <span class="cell editable" contenteditable="true">${row.cts}</span>
+      <span class="cell editable" contenteditable="true">${row.price}</span>
+      <span class="cell">${(toNumber(row.cts) * toNumber(row.price)).toFixed(2)}</span>
+      <span class="cell editable" contenteditable="true">${row.remarks}</span>
+      <span class="cell"><button class="small-button" data-action="delete">Delete</button></span>
+    </div>
+  `).join('') + `<div class="row-count">${invoice.rows.length} row(s)</div>`;
+}
+
+function renderReportTable() {
+  const reportBody = document.querySelector('.invoice-table tbody');
+  const printBody = document.querySelector('.print-table tbody');
+  const latestInvoice = generatedInvoices[generatedInvoices.length - 1];
+
+  if (!latestInvoice) {
+    reportBody.innerHTML = '<tr><td colspan="11">No rows generated yet.</td></tr>';
+    printBody.innerHTML = '<tr><td colspan="11">No rows generated yet.</td></tr>';
+    return;
+  }
+
+  const reportRows = latestInvoice.rows.map((row, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td>${row.lotName}</td>
+      <td>${row.description}</td>
+      <td>${row.shape}</td>
+      <td>${row.size}</td>
+      <td>${row.grade}</td>
+      <td>${row.pcs}</td>
+      <td>${row.cts}</td>
+      <td>${row.price}</td>
+      <td>${(toNumber(row.cts) * toNumber(row.price)).toFixed(2)}</td>
+      <td>${row.remarks}</td>
+    </tr>
+  `).join('');
+
+  const totalCts = latestInvoice.rows.reduce((sum, row) => sum + toNumber(row.cts), 0);
+  const totalAmount = latestInvoice.rows.reduce((sum, row) => sum + (toNumber(row.cts) * toNumber(row.price)), 0);
+
+  reportBody.innerHTML = reportRows;
+  printBody.innerHTML = `${reportRows}
+    <tr>
+      <td colspan="6" class="totals-label">Totals:</td>
+      <td>${latestInvoice.rows.reduce((sum, row) => sum + toNumber(row.pcs), 0)}</td>
+      <td>${totalCts.toFixed(2)}</td>
+      <td>-</td>
+      <td>${totalAmount.toFixed(2)}</td>
+      <td></td>
+    </tr>`;
+}
+
+function renderSummaryTables() {
+  const cashFlowBody = document.querySelector('#cash-flow .table-body');
+  const statementBody = document.querySelector('#partywise-statement .table-body');
+  const ledgerBody = document.querySelector('#client-ledger .table-body');
+
+  let running = 0;
+  cashFlowBody.innerHTML = generatedInvoices.map((invoice) => {
+    const amount = invoice.rows.reduce((sum, row) => sum + (toNumber(row.cts) * toNumber(row.price)), 0);
+    running += amount;
+    return `<div class="table-row"><span class="cell">${formatDate(invoice.date)}</span><span class="cell">${invoice.party}</span><span class="cell">${invoice.transactionType}</span><span class="cell">${amount.toFixed(2)}</span><span class="cell">${running.toFixed(2)}</span><span class="cell"></span></div>`;
+  }).join('') + `<div class="row-count">${generatedInvoices.length} row(s)</div>`;
+
+  statementBody.innerHTML = generatedInvoices.map((invoice) => {
+    const amount = invoice.rows.reduce((sum, row) => sum + (toNumber(row.cts) * toNumber(row.price)), 0);
+    return `<div class="table-row"><span class="cell">${formatDate(invoice.date)}</span><span class="cell">${invoice.invoiceNumber}</span><span class="cell">${invoice.transactionType}</span><span class="cell">${amount.toFixed(2)}</span><span class="cell">0.00</span><span class="cell">${amount.toFixed(2)}</span></div>`;
+  }).join('') + `<div class="row-count">${generatedInvoices.length} row(s)</div>`;
+
+  ledgerBody.innerHTML = generatedInvoices.map((invoice) => {
+    const amount = invoice.rows.reduce((sum, row) => sum + (toNumber(row.cts) * toNumber(row.price)), 0);
+    return `<div class="table-row"><span class="cell">${invoice.invoiceNumber}</span><span class="cell">${formatDate(invoice.date)}</span><span class="cell">${invoice.transactionType}</span><span class="cell">${amount.toFixed(2)}</span><span class="cell">0.00</span><span class="cell">${amount.toFixed(2)}</span></div>`;
+  }).join('') + `<div class="row-count">${generatedInvoices.length} row(s)</div>`;
+}
+
 function generateRows() {
-  const allInputs = document.querySelectorAll('input, select');
-  let rowCountInput = null;
+  const rowCount = Math.max(1, parseInt(document.getElementById('invoice-row-count')?.value, 10) || 1);
+  const date = toIsoDate(document.getElementById('invoice-date')?.value);
+  const party = document.getElementById('invoice-party')?.value.trim() || 'Walk-in Party';
+  const transactionType = document.getElementById('invoice-transaction-type')?.value || 'Sales';
+  const baseGrade = document.querySelector('select[data-saved-list="grades"]')?.value;
+  const description = document.querySelector('select[data-saved-list="descriptions"]')?.value;
+  const shape = document.querySelector('select[data-saved-list="shapes"]')?.value;
+  const size = document.querySelector('select[data-saved-list="sizes"]')?.value;
+  const lotName = document.querySelector('select[data-saved-list="lot_names"]')?.value;
 
-  for (const input of allInputs) {
-    if (input.placeholder === 'Enter rows' || (input.type === 'text' && input.value === '1')) {
-      if (input.closest('.form-grid') && input.previousElementSibling?.textContent === 'How Many Rows') {
-        rowCountInput = input;
-        break;
-      }
-    }
-  }
+  const invoice = {
+    id: Date.now(),
+    invoiceNumber: `INV-${date.replace(/-/g, '')}-${String(generatedInvoices.length + 1).padStart(4, '0')}`,
+    date,
+    party,
+    transactionType,
+    rows: Array.from({ length: rowCount }, (_, index) => ({
+      id: `${Date.now()}-${index}`,
+      txId: `${generatedInvoices.length + 1}-${index + 1}`,
+      stone: 'Calibrate',
+      deet: '',
+      lotName: lotName !== '-- Select --' ? lotName : '',
+      grade: baseGrade !== '-- Select --' ? baseGrade : '',
+      description: description !== '-- Select --' ? description : '',
+      shape: shape !== '-- Select --' ? shape : '',
+      size: size !== '-- Select --' ? size : '',
+      pcs: 1,
+      cts: 0,
+      price: 0,
+      remarks: '',
+    })),
+  };
 
-  const rowCount = rowCountInput ? parseInt(rowCountInput.value) || 1 : 1;
-  const tableBody = document.querySelector('.table-body');
+  generatedInvoices.push(invoice);
+  renderInvoiceRows(invoice);
+  renderReportTable();
+  renderSummaryTables();
 
-  const baseGrade = document.querySelector('select[data-saved-list="grades"]').value;
-  const description = document.querySelector('select[data-saved-list="descriptions"]').value;
-  const shape = document.querySelector('select[data-saved-list="shapes"]').value;
-  const size = document.querySelector('select[data-saved-list="sizes"]').value;
-
-  let rows = '';
-  for (let i = 0; i < rowCount; i++) {
-    rows += `
-      <div class="table-row" data-row-id="${Date.now()}-${i}">
-        <span class="cell"></span>
-        <span class="cell"></span>
-        <span class="cell"></span>
-        <span class="cell"></span>
-        <span class="cell"></span>
-        <span class="cell"></span>
-        <span class="cell editable" contenteditable="true">${baseGrade !== '-- Select --' ? baseGrade : ''}</span>
-        <span class="cell editable" contenteditable="true">${description !== '-- Select --' ? description : ''}</span>
-        <span class="cell editable" contenteditable="true">${shape !== '-- Select --' ? shape : ''}</span>
-        <span class="cell editable" contenteditable="true">${size !== '-- Select --' ? size : ''}</span>
-        <span class="cell editable" contenteditable="true">0</span>
-        <span class="cell editable" contenteditable="true">0</span>
-        <span class="cell editable" contenteditable="true">0</span>
-        <span class="cell editable" contenteditable="true"></span>
-        <span class="cell"><button class="small-button" data-action="delete">Delete</button></span>
-      </div>
-    `;
-  }
-
-  tableBody.innerHTML = rows + `<div class="row-count">${rowCount} row(s)</div>`;
-
-  document.querySelectorAll('[data-action="delete"]').forEach(btn => {
+  document.querySelectorAll('#invoice-ui [data-action="delete"]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
-      e.target.closest('.table-row').remove();
-      updateRowCount();
+      const rowEl = e.target.closest('.table-row');
+      const rowId = rowEl?.dataset.rowId;
+      invoice.rows = invoice.rows.filter((row) => row.id !== rowId);
+      renderInvoiceRows(invoice);
+      renderReportTable();
+      renderSummaryTables();
     });
   });
 }
@@ -163,7 +268,7 @@ function initPageNavigation() {
 }
 
 function initEventListeners() {
-  const generateRowsBtn = document.querySelector('#invoice-ui .primary-button');
+  const generateRowsBtn = document.getElementById('generate-rows-button');
   if (generateRowsBtn) {
     generateRowsBtn.addEventListener('click', generateRows);
   }

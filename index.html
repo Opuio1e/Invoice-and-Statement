@@ -39,15 +39,15 @@
             </div>
             <div class="field">
               <label>Date</label>
-              <input type="text" placeholder="mm/dd/yyyy" />
+              <input id="invoice-date" type="text" placeholder="mm/dd/yyyy" />
             </div>
             <div class="field">
               <label>Party</label>
-              <input type="text" placeholder="Supplier / Customer" />
+              <input id="invoice-party" type="text" placeholder="Supplier / Customer" />
             </div>
             <div class="field">
               <label>Transaction Type</label>
-              <select>
+              <select id="invoice-transaction-type">
                 <option>Sales</option>
                 <option>Approval</option>
               </select>
@@ -70,7 +70,7 @@
             </div>
             <div class="field">
               <label>How Many Rows</label>
-              <input type="text" value="1" />
+              <input id="invoice-row-count" type="number" min="1" value="1" />
             </div>
             <div class="field">
               <label>Description</label>
@@ -91,7 +91,7 @@
               </select>
             </div>
           </div>
-          <button class="primary-button">Generate Rows</button>
+          <button id="generate-rows-button" class="primary-button">Generate Rows</button>
 
           <div class="table-shell">
             <div class="table-head">
