@@ -332,17 +332,94 @@ function renderReportTable() {
   renderInvoiceReport(reportState.persistedInvoices, getReportFilters());
 }
 
-function renderSummaryTables() {
+function getCashFlowFilters() {
+  const cashFlowRoot = document.querySelector('#cash-flow');
+  if (!cashFlowRoot) {
+    return { from: '', to: '', transactionType: '', party: '' };
+  }
+
+  const from = cashFlowRoot.querySelector('.field:nth-child(1) input')?.value || '';
+  const to = cashFlowRoot.querySelector('.field:nth-child(2) input')?.value || '';
+  const transactionType = cashFlowRoot.querySelector('.field:nth-child(3) select')?.value || '';
+  const party = cashFlowRoot.querySelector('.field:nth-child(4) input')?.value || '';
+
+  return { from, to, transactionType, party };
+}
+
+function renderCashFlowTable(rows = []) {
   const cashFlowBody = document.querySelector('#cash-flow .table-body');
+  if (!cashFlowBody) return;
+
+  if (!rows.length) {
+    cashFlowBody.innerHTML = '<div class="row-count">0 row(s)</div>';
+    return;
+  }
+
+  cashFlowBody.innerHTML = rows.map((row) => `
+    <div class="table-row">
+      <span class="cell">${formatDate(row.date)}</span>
+      <span class="cell">${escapeHtml(row.party)}</span>
+      <span class="cell">${escapeHtml(row.type)}</span>
+      <span class="cell">${toNumber(row.amount).toFixed(2)}</span>
+      <span class="cell">${toNumber(row.balance).toFixed(2)}</span>
+      <span class="cell">${escapeHtml(row.remarks || '')}</span>
+    </div>
+  `).join('') + `<div class="row-count">${rows.length} row(s)</div>`;
+}
+
+async function loadCashFlow() {
+  const filters = getCashFlowFilters();
+  const params = new URLSearchParams();
+  if (filters.from) params.set('from', toIsoDate(filters.from));
+  if (filters.to) params.set('to', toIsoDate(filters.to));
+  if (filters.transactionType) params.set('transactionType', filters.transactionType);
+  if (filters.party.trim()) params.set('party', filters.party.trim());
+
+  try {
+    const response = await fetch(`/api/cash-flow?${params.toString()}`);
+    if (!response.ok) throw new Error(`Cash flow API failed: ${response.status}`);
+    const payload = await response.json();
+    renderCashFlowTable(payload.rows || []);
+    return;
+  } catch (error) {
+    console.warn('Cash flow API unavailable, trying Supabase fallback.', error);
+  }
+
+  try {
+    let query = supabase.from('invoices').select('*').order('date', { ascending: true });
+    if (filters.from) query = query.gte('date', toIsoDate(filters.from));
+    if (filters.to) query = query.lte('date', toIsoDate(filters.to));
+    if (filters.transactionType) query = query.eq('transactionType', filters.transactionType);
+    if (filters.party.trim()) query = query.ilike('party', `%${filters.party.trim()}%`);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    let runningBalance = 0;
+    const rows = (data || []).map((invoice) => {
+      const normalized = normalizeInvoice(invoice);
+      const amount = normalized.rows.reduce((sum, row) => sum + (toNumber(row.cts) * toNumber(row.price)), 0);
+      runningBalance += amount;
+      return {
+        date: normalized.date,
+        party: normalized.party,
+        type: normalized.transactionType,
+        amount,
+        balance: runningBalance,
+        remarks: invoice.remarks || '',
+      };
+    });
+
+    renderCashFlowTable(rows);
+  } catch (error) {
+    console.warn('Unable to load cash flow from Supabase fallback.', error);
+    renderCashFlowTable([]);
+  }
+}
+
+function renderSummaryTables() {
   const statementBody = document.querySelector('#partywise-statement .table-body');
   const ledgerBody = document.querySelector('#client-ledger .table-body');
-
-  let running = 0;
-  cashFlowBody.innerHTML = generatedInvoices.map((invoice) => {
-    const amount = invoice.rows.reduce((sum, row) => sum + (toNumber(row.cts) * toNumber(row.price)), 0);
-    running += amount;
-    return `<div class="table-row"><span class="cell">${formatDate(invoice.date)}</span><span class="cell">${invoice.party}</span><span class="cell">${invoice.transactionType}</span><span class="cell">${amount.toFixed(2)}</span><span class="cell">${running.toFixed(2)}</span><span class="cell"></span></div>`;
-  }).join('') + `<div class="row-count">${generatedInvoices.length} row(s)</div>`;
 
   statementBody.innerHTML = generatedInvoices.map((invoice) => {
     const amount = invoice.rows.reduce((sum, row) => sum + (toNumber(row.cts) * toNumber(row.price)), 0);
@@ -395,6 +472,7 @@ async function generateRows() {
   renderInvoiceRows(invoice);
   renderReportTable();
   renderSummaryTables();
+  await loadCashFlow();
 
   document.querySelectorAll('#invoice-ui [data-action="delete"]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
@@ -404,6 +482,7 @@ async function generateRows() {
       renderInvoiceRows(invoice);
       renderReportTable();
       renderSummaryTables();
+      loadCashFlow();
     });
   });
 }
@@ -443,6 +522,14 @@ function initPageNavigation() {
   const goToPage = () => setActivePage(resolveInitialPage());
   window.addEventListener('hashchange', goToPage);
   goToPage();
+}
+
+function debounce(fn, delay = 250) {
+  let timer = null;
+  return (...args) => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => fn(...args), delay);
+  };
 }
 
 function initEventListeners() {
@@ -495,6 +582,19 @@ function initEventListeners() {
       window.print();
       setTimeout(() => document.body.classList.remove('print-report-view'), 0);
     });
+  }
+
+  const cashFlowRoot = document.querySelector('#cash-flow');
+  if (cashFlowRoot) {
+    const fromInput = cashFlowRoot.querySelector('.field:nth-child(1) input');
+    const toInput = cashFlowRoot.querySelector('.field:nth-child(2) input');
+    const typeSelect = cashFlowRoot.querySelector('.field:nth-child(3) select');
+    const partyInput = cashFlowRoot.querySelector('.field:nth-child(4) input');
+
+    fromInput?.addEventListener('change', loadCashFlow);
+    toInput?.addEventListener('change', loadCashFlow);
+    typeSelect?.addEventListener('change', loadCashFlow);
+    partyInput?.addEventListener('input', debounce(loadCashFlow, 300));
   }
 }
 
@@ -553,6 +653,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadLists();
   await loadPersistedInvoices();
   renderReportTable();
+  await loadCashFlow();
   initPageNavigation();
   initEventListeners();
 });
