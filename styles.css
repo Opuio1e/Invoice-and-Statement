@@ -55,6 +55,34 @@ main {
   border-color: #4b4339;
 }
 
+
+.auth-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e2d3bf;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.auth-status {
+  font-size: 13px;
+  color: #5a5247;
+}
+
+.auth-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.auth-controls input {
+  min-width: 180px;
+}
+
 .page-section {
   margin-top: 32px;
 }
