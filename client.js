@@ -133,8 +133,40 @@ function updateRowCount() {
   }
 }
 
+
+function resolveInitialPage() {
+  const hash = window.location.hash;
+  if (!hash) return 'invoice-ui';
+  const pageId = hash.slice(1);
+  return document.getElementById(pageId) ? pageId : 'invoice-ui';
+}
+
+function setActivePage(pageId) {
+  const pages = document.querySelectorAll('[data-page]');
+  const links = document.querySelectorAll('[data-page-link]');
+
+  pages.forEach((page) => {
+    page.hidden = page.id !== pageId;
+  });
+
+  links.forEach((link) => {
+    const isActive = link.getAttribute('href') === `#${pageId}`;
+    link.classList.toggle('is-active', isActive);
+    link.setAttribute('aria-current', isActive ? 'page' : 'false');
+  });
+}
+
+function initPageNavigation() {
+  const goToPage = () => setActivePage(resolveInitialPage());
+  window.addEventListener('hashchange', goToPage);
+  goToPage();
+}
+
 function initEventListeners() {
-  document.querySelector('.primary-button').addEventListener('click', generateRows);
+  const generateRowsBtn = document.querySelector('#invoice-ui .primary-button');
+  if (generateRowsBtn) {
+    generateRowsBtn.addEventListener('click', generateRows);
+  }
 
   for (const listName of LISTS) {
     const panel = document.querySelector(`[data-list="${listName}"]`);
@@ -174,5 +206,6 @@ function fixListPanelMarkup() {
 document.addEventListener('DOMContentLoaded', () => {
   fixListPanelMarkup();
   loadLists();
+  initPageNavigation();
   initEventListeners();
 });

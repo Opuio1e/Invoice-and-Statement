@@ -18,17 +18,18 @@
     <script type="module" src="./client.js"></script>
     <header class="site-header">
       <h1>Invoice and Statement</h1>
-      <nav class="site-nav">
-        <a href="#invoice-ui">Invoice UI</a>
-        <a href="#cash-flow">Cash Flow UI</a>
-        <a href="#client-ledger">Client Ledger</a>
-        <a href="#partywise-statement">Partywise Statement</a>
-        <a href="#invoice-report">Invoice Report</a>
+      <nav class="site-nav" aria-label="Application pages">
+        <a class="menu-tab" data-page-link href="#invoice-ui">Invoice UI</a>
+        <a class="menu-tab" data-page-link href="#saved-lists">Saved Lists</a>
+        <a class="menu-tab" data-page-link href="#invoice-report">Invoice Report</a>
+        <a class="menu-tab" data-page-link href="#cash-flow">Cash Flow UI</a>
+        <a class="menu-tab" data-page-link href="#partywise-statement">Partywise Statement</a>
+        <a class="menu-tab" data-page-link href="#client-ledger">Client Ledger</a>
       </nav>
     </header>
 
     <main>
-      <section id="invoice-ui" class="page-section">
+      <section id="invoice-ui" class="page-section" data-page>
         <h2>Invoice UI</h2>
         <div class="card invoice-card">
           <div class="form-grid">
@@ -115,7 +116,8 @@
         </div>
       </section>
 
-      <section class="page-section">
+      <section id="saved-lists" class="page-section" data-page>
+        <h2>Saved Lists</h2>
         <h3 class="modal-title">Saved Lists</h3>
         <div class="modal-shell">
           <div class="modal-header">
@@ -216,7 +218,7 @@
         </div>
       </section>
 
-      <section id="invoice-report" class="page-section">
+      <section id="invoice-report" class="page-section" data-page>
         <h2>Invoice Report</h2>
         <div class="invoice-report">
           <div class="report-header">
@@ -404,7 +406,7 @@
         </div>
       </section>
 
-      <section id="cash-flow" class="page-section">
+      <section id="cash-flow" class="page-section" data-page>
         <h2>Cash Flow UI</h2>
         <div class="card">
           <div class="form-grid compact">
@@ -442,7 +444,7 @@
         </div>
       </section>
 
-      <section id="partywise-statement" class="page-section">
+      <section id="partywise-statement" class="page-section" data-page>
         <h2>Partywise Statement</h2>
         <div class="card statement-card">
           <div class="form-grid compact statement-filters">
@@ -475,7 +477,7 @@
         </div>
       </section>
 
-      <section id="client-ledger" class="page-section">
+      <section id="client-ledger" class="page-section" data-page>
         <h2>Client Ledger</h2>
         <div class="card">
           <div class="form-grid compact">
