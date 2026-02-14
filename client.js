@@ -548,13 +548,64 @@ async function loadCashFlow() {
   }
 }
 
-function renderSummaryTables() {
-  const ledgerBody = document.querySelector('#client-ledger .table-body');
+function getClientLedgerFilters() {
+  const root = document.querySelector('#client-ledger');
+  if (!root) {
+    return { party: '', from: '', to: '' };
+  }
 
-  ledgerBody.innerHTML = generatedInvoices.map((invoice) => {
-    const amount = invoice.rows.reduce((sum, row) => sum + (toNumber(row.cts) * toNumber(row.price)), 0);
-    return `<div class="table-row"><span class="cell">${invoice.invoiceNumber}</span><span class="cell">${formatDate(invoice.date)}</span><span class="cell">${invoice.transactionType}</span><span class="cell">${amount.toFixed(2)}</span><span class="cell">0.00</span><span class="cell">${amount.toFixed(2)}</span></div>`;
-  }).join('') + `<div class="row-count">${generatedInvoices.length} row(s)</div>`;
+  return {
+    party: root.querySelector('#client-ledger-party')?.value.trim() || '',
+    from: root.querySelector('#client-ledger-from')?.value || '',
+    to: root.querySelector('#client-ledger-to')?.value || '',
+  };
+}
+
+function renderClientLedger(rows = []) {
+  const ledgerBody = document.querySelector('#client-ledger .table-body');
+  if (!ledgerBody) return;
+
+  if (!rows.length) {
+    ledgerBody.innerHTML = '<div class="table-row"><span class="cell" style="grid-column: 1 / -1;">No ledger entries found.</span></div><div class="row-count">0 row(s)</div>';
+    return;
+  }
+
+  ledgerBody.innerHTML = `${rows.map((row) => `
+    <div class="table-row">
+      <span class="cell">${escapeHtml(row.refNo || '')}</span>
+      <span class="cell">${formatDate(row.date)}</span>
+      <span class="cell">${escapeHtml(row.description || '')}</span>
+      <span class="cell">${toNumber(row.debit).toFixed(2)}</span>
+      <span class="cell">${toNumber(row.credit).toFixed(2)}</span>
+      <span class="cell">${toNumber(row.balance).toFixed(2)}</span>
+    </div>
+  `).join('')}<div class="row-count">${rows.length} row(s)</div>`;
+}
+
+async function loadClientLedger() {
+  const filters = getClientLedgerFilters();
+  if (!filters.party) {
+    renderClientLedger([]);
+    return;
+  }
+
+  const params = new URLSearchParams({ party: filters.party });
+  if (filters.from) params.set('from', toIsoDate(filters.from));
+  if (filters.to) params.set('to', toIsoDate(filters.to));
+
+  try {
+    const response = await fetch(`/api/client-ledger?${params.toString()}`);
+    if (!response.ok) throw new Error(`Client ledger API failed: ${response.status}`);
+    const payload = await response.json();
+    renderClientLedger(payload.ledger || []);
+  } catch (error) {
+    console.warn('Unable to load client ledger.', error);
+    renderClientLedger([]);
+  }
+}
+
+function renderSummaryTables() {
+  return loadClientLedger();
 }
 
 async function generateRows() {
@@ -597,7 +648,7 @@ async function generateRows() {
   await loadParties();
   renderInvoiceRows(invoice);
   renderReportTable();
-  renderSummaryTables();
+  await renderSummaryTables();
   await loadCashFlow();
   await loadPartywiseStatement();
 
@@ -735,6 +786,18 @@ function initEventListeners() {
     fromInput?.addEventListener('change', loadPartywiseStatement);
     toInput?.addEventListener('change', loadPartywiseStatement);
   }
+
+  const clientLedgerRoot = document.querySelector('#client-ledger');
+  if (clientLedgerRoot) {
+    const partyInput = clientLedgerRoot.querySelector('#client-ledger-party');
+    const fromInput = clientLedgerRoot.querySelector('#client-ledger-from');
+    const toInput = clientLedgerRoot.querySelector('#client-ledger-to');
+
+    partyInput?.addEventListener('change', loadClientLedger);
+    partyInput?.addEventListener('input', debounce(loadClientLedger, 300));
+    fromInput?.addEventListener('change', loadClientLedger);
+    toInput?.addEventListener('change', loadClientLedger);
+  }
 }
 
 function initInvoiceReportDom() {
@@ -795,6 +858,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderReportTable();
   await loadCashFlow();
   await loadPartywiseStatement();
+  await loadClientLedger();
   initPageNavigation();
   initEventListeners();
 });

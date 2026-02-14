@@ -141,6 +141,56 @@ app.get("/api/partywise-statement", (req, res) => {
   res.json({ party, statement });
 });
 
+app.get("/api/client-ledger", (req, res) => {
+  const party = String(req.query.party || req.query.client || "").trim();
+  if (!party) {
+    return res.status(400).json({ error: "party (or client) query param is required." });
+  }
+
+  const fromDate = req.query.from ? new Date(req.query.from) : null;
+  const toDate = req.query.to ? new Date(req.query.to) : null;
+
+  if (fromDate && Number.isNaN(fromDate.getTime())) {
+    return res.status(400).json({ error: "from must be a valid date." });
+  }
+
+  if (toDate && Number.isNaN(toDate.getTime())) {
+    return res.status(400).json({ error: "to must be a valid date." });
+  }
+
+  const rows = dataStore.invoices
+    .filter((invoice) => {
+      if (invoice.party !== party) return false;
+      const invoiceDate = new Date(invoice.date);
+      if (fromDate && invoiceDate < fromDate) return false;
+      if (toDate && invoiceDate > toDate) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const dateDiff = new Date(a.date) - new Date(b.date);
+      if (dateDiff !== 0) return dateDiff;
+      return String(a.invoiceNumber || "").localeCompare(String(b.invoiceNumber || ""));
+    });
+
+  let runningBalance = 0;
+  const ledger = rows.map((invoice) => {
+    const amount = Number(invoice.totals?.totalAmount || 0);
+    const { debit, credit } = getStatementTransactionColumns(invoice.transactionType, amount);
+    runningBalance += debit - credit;
+
+    return {
+      refNo: invoice.invoiceNumber,
+      date: invoice.date,
+      description: invoice.transactionType,
+      debit,
+      credit,
+      balance: runningBalance,
+    };
+  });
+
+  res.json({ party, ledger });
+});
+
 app.get("/api/cash-flow", (req, res) => {
   const { from, to, transactionType, party } = req.query;
   const fromDate = from ? new Date(from) : null;
