@@ -695,10 +695,9 @@ function updateRowCount() {
 
 
 function resolveInitialPage() {
-  const hash = window.location.hash;
-  if (!hash) return 'invoice-ui';
-  const pageId = hash.slice(1);
-  return document.getElementById(pageId) ? pageId : 'invoice-ui';
+  const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
+  if (!path) return 'invoice-ui';
+  return document.getElementById(path) ? path : 'invoice-ui';
 }
 
 function setActivePage(pageId) {
@@ -710,7 +709,7 @@ function setActivePage(pageId) {
   });
 
   links.forEach((link) => {
-    const isActive = link.getAttribute('href') === `#${pageId}`;
+    const isActive = link.getAttribute('href') === `/${pageId}`;
     link.classList.toggle('is-active', isActive);
     link.setAttribute('aria-current', isActive ? 'page' : 'false');
   });
@@ -718,7 +717,24 @@ function setActivePage(pageId) {
 
 function initPageNavigation() {
   const goToPage = () => setActivePage(resolveInitialPage());
-  window.addEventListener('hashchange', goToPage);
+
+  document.querySelectorAll('[data-page-link]').forEach((link) => {
+    link.addEventListener('click', (event) => {
+      const nextPath = link.getAttribute('href') || '/invoice-ui';
+      const pageId = nextPath.replace(/^\/+/, '') || 'invoice-ui';
+
+      if (!document.getElementById(pageId)) return;
+      event.preventDefault();
+
+      if (window.location.pathname !== nextPath) {
+        window.history.pushState({}, '', nextPath);
+      }
+
+      setActivePage(pageId);
+    });
+  });
+
+  window.addEventListener('popstate', goToPage);
   goToPage();
 }
 
